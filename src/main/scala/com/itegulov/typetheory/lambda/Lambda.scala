@@ -36,7 +36,7 @@ case class App(function: Lambda, argument: Lambda) extends Lambda {
     case _ => false
   }
 
-  override def toString = s"($function) ($argument)"
+  override def toString = mkStringWithBrackets(this)
 
   override def freeVars: Set[Var] = function.freeVars ++ argument.freeVars
 
@@ -58,7 +58,7 @@ case class Abs(variable: Var, body: Lambda) extends Lambda {
     case _ => false
   }
 
-  override def toString = s"λ$variable.($body)"
+  override def toString = mkStringWithBrackets(this)
 
   override def freeVars: Set[Var] = body.freeVars - variable
 

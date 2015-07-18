@@ -32,5 +32,7 @@ package object lambda {
     }
   }
 
+  def normalForm(expression: Lambda): Lambda = conversion.addNames(debruijn.normalForm(conversion.removeNames(expression)))
+
   class NoFreeSubstitutionException(val v: Var) extends Exception
 }
