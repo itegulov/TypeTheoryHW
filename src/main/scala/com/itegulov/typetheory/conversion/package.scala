@@ -46,8 +46,21 @@ package object conversion {
     sb.toString()
   }
 
+  private def renameBackOnlyLetters(hash: Int): String = {
+    @tailrec
+    def renameBackOnlyLetters(result: StringBuilder, hash: Int): Unit = {
+      result.append(decode(hash % 26))
+      if (hash / 26 != 0) {
+        renameBackOnlyLetters(result, hash / 26)
+      }
+    }
+    val sb = new StringBuilder
+    renameBackOnlyLetters(sb, hash)
+    sb.toString()
+  }
+
   def addNames(exp: DeBruijn): Lambda = {
-    def possible(n: Int): Stream[String] = renameBack(n) #:: possible(n + 1)
+    def possible(n: Int): Stream[String] = renameBackOnlyLetters(n) #:: possible(n + 1)
     def valid(exp: DeBruijn, stream: Stream[String]): Stream[String] =
       if (exp.freeVars.contains(DVar(rename(stream.head)))) valid(exp, stream.tail)
       else stream.head #:: stream.tail
