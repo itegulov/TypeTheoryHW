@@ -1,8 +1,7 @@
 package com.itegulov.typetheory.lambda
 
+import scala.util.parsing.combinator.RegexParsers
 import scala.util.parsing.combinator.lexical.StdLexical
-import scala.util.parsing.combinator.{RegexParsers, PackratParsers}
-import scala.util.parsing.combinator.syntactical.StdTokenParsers
 
 /**
  * Lexer, telling, that λ isn't a letter
@@ -59,7 +58,7 @@ object LambdaParser extends RegexParsers {
 
   def lambda: Parser[String] = """\\|λ""".r
 
-  def variable: Parser[Var] = """[a-z][a-z,0-9,']*""".r ^^ Var
+  def variable: Parser[Var] = """[a-z][a-z0-9']*""".r ^^ Var
 
   def apply(input: String): Lambda = {
     parseAll(expression, input) match {
