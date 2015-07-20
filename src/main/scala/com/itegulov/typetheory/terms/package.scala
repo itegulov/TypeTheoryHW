@@ -18,6 +18,12 @@ package object terms {
       case _ => false
     }
 
+  def isDifferentTFun(eq: TermEq): Boolean =
+    (eq.left, eq.right) match {
+      case (TFun(a, _), TFun(b, _)) => a != b
+      case _ => false
+    }
+
   def termReduction(eq: TermEq): mutable.Buffer[TermEq] =
     (eq.left, eq.right) match {
       case (TFun(_, arg1), TFun(_, arg2)) => arg1.zip(arg2).map(a => new TermEq(a._1, a._2)).toBuffer
@@ -31,42 +37,44 @@ package object terms {
     }
 
   def swapIfNeeded(buffer: mutable.Buffer[TermEq]): mutable.Buffer[TermEq] =
-    buffer.transform {
-      case TermEq(a@TFun(_, _), b@TVar(_)) => TermEq(b, a)
+    buffer.map {
+      case TermEq(a: TFun, b: TVar) => TermEq(b, a)
+      case a => a
     }
-
-  def contains(what: Term, where: Term): Boolean =
-    where match {
-      case v: TVar => v == what
-      case f: TFun => f == what || f.arguments.exists(contains(what, _))
-    }
-
-  def contains(what: Term, where: TermEq): Boolean =
-    contains(what, where.left) || contains(what, where.right)
 
   def isUnique(eq: TermEq, buffer: mutable.Buffer[TermEq]): Boolean =
     eq match {
-      case t@TermEq(a: TVar, b: Term) => b != a && (buffer - eq).exists(contains(a, _))
+      case t@TermEq(a: TVar, b: Term) => b != a && (buffer - eq).exists(_.contains(a))
       case _ => false
     }
 
-  def unify(list: mutable.Buffer[TermEq]): mutable.Buffer[TermEq] =
-    list.find(isSameTFun) match {
-      case Some(x) => unify(termReduction(x) ++ (list - x))
-      case None => list.find(!isSameTFun(_)) match {
+  def unify(buffer: mutable.Buffer[TermEq]): mutable.Buffer[TermEq] =
+    buffer.find(isSameTFun) match {
+      case Some(x) => unify(termReduction(x) ++ (buffer - x))
+      case None => buffer.find(isDifferentTFun) match {
         case Some(x) => throw new NoSolutionException("No solution")
-        case None => list.find(isSameTVar) match {
-          case Some(x) => unify(list.filter(!isSameTVar(_)))
-          case None => list.find(isSwapNeeded) match {
-            case Some(x) => unify(swapIfNeeded(list))
-            case None => list.find(isUnique(_, list)) match {
-              case Some(x) => ???
-              case None => list
+        case None => buffer.find(isSameTVar) match {
+          case Some(x) => unify(buffer.filter(!isSameTVar(_)))
+          case None => buffer.find(isSwapNeeded) match {
+            case Some(x) => unify(swapIfNeeded(buffer))
+            case None => buffer.find(isUnique(_, buffer)) match {
+              case Some(x) => x match {
+                case t@TermEq(a: TVar, b: Term) =>
+                  if (b.contains(a)) throw new NoSolutionException("No solution")
+                  else unify((buffer - x).map(_.substitute(a, b)) ++ mutable.Buffer(x))
+              }
+              case None => buffer
             }
           }
         }
       }
     }
+
+  def addIDs(buffer: mutable.Buffer[TermEq]): mutable.Buffer[TermEq] = {
+    val left: Set[TVar] = buffer.flatMap(_.left.getAllVariables).toSet
+    val right: Set[TVar] = buffer.flatMap(_.right.getAllVariables).toSet
+    (right -- left).map(v => TermEq(v, v)).toBuffer ++ buffer
+  }
 
   class NoSolutionException(msg: String) extends Exception(msg)
 }
