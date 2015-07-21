@@ -25,7 +25,7 @@ object TermParser extends RegexParsers {
     term ~ "," ~ arguments ^^ {case t ~ "," ~ args => t :: args} |
     term ^^ { case t => List(t) }
 
-  def functionName: Parser[String] = """[a-z][a-z,0-9,']*""".r
+  def functionName: Parser[String] = """[a-z][a-z0-9']*""".r
 
   def variable: Parser[TVar] = """[a-z][a-z0-9']*""".r ^^ TVar
 
