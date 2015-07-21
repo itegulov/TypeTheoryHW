@@ -13,7 +13,7 @@ import scala.io.Source
  */
 object HW5 extends scala.App {
   val pw = new PrintWriter("task5.out")
-  val buffer: mutable.Buffer[TermEq] = new ArrayBuffer[TermEq]
+  val buffer: mutable.Buffer[TermEq[String]] = new ArrayBuffer[TermEq[String]]
   for (line <- Source.fromFile("task5.in", "UTF-8").getLines()) {
     buffer += TermParser(line)
   }
