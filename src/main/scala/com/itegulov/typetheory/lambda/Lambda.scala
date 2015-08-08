@@ -1,12 +1,28 @@
 package com.itegulov.typetheory.lambda
 
+import com.itegulov.typetheory.terms.TermEq
+import com.itegulov.typetheory.types.{TypeState, Arrow, Atom, Type}
+
 /**
  * @author Daniyar Itegulov
  */
+object Lambda {
+  private def atoms(n: Int): Stream[Type] = Atom("τ" + n) #:: atoms(n + 1)
+  def allAtoms: Stream[Type] = atoms(1)
+}
+
+
 sealed trait Lambda {
   def freeVars: Set[Var]
   def boundVars: Set[Var]
   def substitute(v: Var, e: Lambda): Either[Var, Lambda]
+  def getType: (Type, Map[Var, Type], List[TermEq[Type]]) = {
+    val vars: List[Var] = freeVars.toList
+    val allType: List[Type] = Lambda.allAtoms.take(vars.length).toList
+    val map: Map[Var, Type] = vars.zip(allType).toMap
+    val finalType: Type = allType.reduceLeft((a: Type, b: Type) => Arrow(a, b))
+    (finalType, map, TypeState(List((map, this, finalType)), List()).process())
+  }
 }
 
 case class Var(name: String) extends Lambda {
