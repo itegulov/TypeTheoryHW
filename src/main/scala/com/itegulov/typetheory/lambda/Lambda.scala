@@ -1,27 +1,53 @@
 package com.itegulov.typetheory.lambda
 
-import com.itegulov.typetheory.terms.TermEq
 import com.itegulov.typetheory.types.{TypeState, Arrow, Atom, Type}
+import com.itegulov.typetheory.terms._
+
+import scala.collection.mutable
 
 /**
  * @author Daniyar Itegulov
  */
 object Lambda {
   private def atoms(n: Int): Stream[Type] = Atom("τ" + n) #:: atoms(n + 1)
+
   def allAtoms: Stream[Type] = atoms(1)
 }
 
 
 sealed trait Lambda {
   def freeVars: Set[Var]
+
   def boundVars: Set[Var]
+
   def substitute(v: Var, e: Lambda): Either[Var, Lambda]
-  def getType: (Type, Map[Var, Type], List[TermEq[Type]]) = {
+
+  def getFullType: (Type, Map[Var, Type], mutable.Buffer[TermEq[Type]]) = {
     val vars: List[Var] = freeVars.toList
     val allType: List[Type] = Lambda.allAtoms.take(vars.length).toList
     val map: Map[Var, Type] = vars.zip(allType).toMap
     val finalType: Type = allType.reduceLeft((a: Type, b: Type) => Arrow(a, b))
-    (finalType, map, TypeState(List((map, this, finalType)), List()).process())
+    (finalType, map, TypeState(List((map, this, finalType)), List()).process().toBuffer)
+  }
+
+  def getType: Option[(Type, Map[Var, Type])] = {
+    def swap(terms: mutable.Buffer[TermEq[Type]]): mutable.Buffer[TermEq[Type]] = terms.map {
+      // TODO: add comparing of types
+      //case TermEq(x@(TVar(a)), y@(TVar(b))) if a > b => TermEq(y, x)
+      case a => a
+    }
+    def find(t: Type, terms: mutable.Buffer[TermEq[Type]]): Option[Term[Type]] =
+      terms.find {
+        case TermEq(TVar(a), _) => a == t
+        case _ => false
+      } match {
+        case Some(term) => Some(term.right)
+        case None => None
+      }
+    val (t, fv, termEqs): (Type, Map[Var, Type], mutable.Buffer[TermEq[Type]]) = getFullType
+    val ns: mutable.Buffer[TermEq[Type]] = addIDs(unify(swap(unify(termEqs))))
+    val ans: Option[Term[Type]] = find(t, ns)
+
   }
 }
 
