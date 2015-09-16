@@ -14,8 +14,12 @@ import scala.io.Source
  */
 object HW6 extends scala.App {
   val pw = new PrintWriter("task6.out")
-  val (t, freeVars) = LambdaParser(Source.fromFile("task6.in", "UTF-8").mkString).getType
-  pw.println(t)
-  pw.println(freeVars.mkString("\n"))
+  try {
+    val (t, freeVars) = LambdaParser(Source.fromFile("task6.in", "UTF-8").mkString).getType
+    pw.println(t)
+    pw.println(freeVars.mkString("\n"))
+  } catch {
+    case _: Throwable => pw.println("Лямбда-выражение не имеет типа")
+  }
   pw.close()
 }
