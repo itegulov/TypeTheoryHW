@@ -39,7 +39,7 @@ case class TypeState(list: List[(Map[Var, Type], Lambda, Type)], terms: List[Ter
         case Abs(v, b) =>
           val newType1: Type = newTypes.head
           val newType2: Type = newTypes.tail.head
-          TypeState((map + (v -> newType1), b, newType2) :: list,
+          TypeState((map + (v -> newType1), b, newType2) :: list.tail,
             TermEq(t.fromType, Arrow(newType1, newType2).fromType) :: terms).process()
       }
     }
