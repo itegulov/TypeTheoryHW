@@ -11,7 +11,7 @@ import scala.collection.mutable
 object Lambda {
   private def atoms(n: Int): Stream[Type] = Atom("τ" + n) #:: atoms(n + 1)
 
-  def allAtoms: Stream[Type] = atoms(1)
+  def allAtoms: Stream[Type] = atoms(0)
 }
 
 
@@ -26,14 +26,14 @@ sealed trait Lambda {
     val vars: List[Var] = freeVars.toList
     val allType: List[Type] = Lambda.allAtoms.take(vars.length).toList
     val map: Map[Var, Type] = vars.zip(allType).toMap
-    val finalType: Type = allType.reduceLeft((a: Type, b: Type) => Arrow(a, b))
+    val finalType: Type = Lambda.allAtoms(vars.length)
     (finalType, map, TypeState(List((map, this, finalType)), List()).process().toBuffer)
   }
 
-  def getType: Option[(Type, Map[Var, Type])] = {
+  def getType: (Type, Map[Var, Type]) = {
     def swap(terms: mutable.Buffer[TermEq[Type]]): mutable.Buffer[TermEq[Type]] = terms.map {
       // TODO: add comparing of types
-      //case TermEq(x@(TVar(a)), y@(TVar(b))) if a > b => TermEq(y, x)
+      case TermEq(x@(TVar(a)), y@(TVar(b))) if a > b => TermEq(y, x)
       case a => a
     }
     def find(t: Type, terms: mutable.Buffer[TermEq[Type]]): Option[Term[Type]] =
@@ -44,10 +44,18 @@ sealed trait Lambda {
         case Some(term) => Some(term.right)
         case None => None
       }
-    val (t, fv, termEqs): (Type, Map[Var, Type], mutable.Buffer[TermEq[Type]]) = getFullType
+    def toType(term: Term[Type]): Type =
+      term match {
+        case TVar(a) => a
+        case TFun("->", (l::r::Nil)) => Arrow(toType(l), toType(r))
+      }
+    val (t0, fv, termEqs): (Type, Map[Var, Type], mutable.Buffer[TermEq[Type]]) = getFullType
     val ns: mutable.Buffer[TermEq[Type]] = addIDs(unify(swap(unify(termEqs))))
-    val ans: Option[Term[Type]] = find(t, ns)
-
+    val ans: Option[Term[Type]] = find(t0, ns)
+    val freeAns: Map[Var, Type] = fv.map {
+      case (l, t) => (l, toType(find(t, ns).get))
+    }
+    (toType(ans.get), freeAns)
   }
 }
 

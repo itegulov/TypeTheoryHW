@@ -5,7 +5,7 @@ import com.itegulov.typetheory.terms.{TFun, TVar, Term}
 /**
  * @author Daniyar Itegulov
  */
-sealed trait Type {
+sealed trait Type extends Ordered[Type] {
   def fromType: Term[Type]
   def subType: List[Type]
 }
@@ -30,6 +30,11 @@ case class Atom(name: String) extends Type {
   override def fromType: Term[Type] = TVar(this)
 
   override def subType: List[Type] = List(this)
+
+  override def compare(o: Type): Int = o match {
+    case Atom(otherName) => name.compareTo(otherName)
+    case arrow: Arrow => -1
+  }
 }
 
 case class Arrow(left: Type, right: Type) extends Type {
@@ -44,4 +49,9 @@ case class Arrow(left: Type, right: Type) extends Type {
   override def fromType: Term[Type] = TFun("->", List(left.fromType, right.fromType))
 
   override def subType: List[Type] = left.subType ++ right.subType
+
+  override def compare(o: Type): Int = o match {
+    case atom: Atom => 1
+    case Arrow(l, r) => if (left.compareTo(l) != 0) left.compareTo(l) else right.compareTo(r)
+  }
 }
