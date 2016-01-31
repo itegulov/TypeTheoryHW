@@ -6,8 +6,8 @@ import com.itegulov.typetheory.terms._
 import scala.collection.mutable
 
 /**
- * @author Daniyar Itegulov
- */
+  * @author Daniyar Itegulov
+  */
 object Lambda {
   private def atoms(n: Int): Stream[Type] = Atom("τ" + n) #:: atoms(n + 1)
 
@@ -16,6 +16,70 @@ object Lambda {
 
 
 sealed trait Lambda {
+
+  private var parent: Lambda = this
+
+  def get(): Lambda = {
+    if (parent != this) parent = parent.get()
+    parent
+  }
+
+  def unite(o: Lambda) = get().parent = o.get()
+
+  def stepFarther(): Lambda = {
+    val p = get()
+    val result = if (p == this) p.step() else p.stepFarther()
+    unite(result)
+    get()
+  }
+
+  def step(): Lambda
+
+  def normalize(): Lambda = {
+    while (get() != stepFarther()) {}
+    get()
+  }
+
+  def substituteWithRename(src: Var, dest: Lambda): Lambda = {
+    val remapped: mutable.Map[String, Var] = new mutable.HashMap[String, Var]()
+    val used = dest.freeVars.map(v => v.name)
+    def recurse(cur: Lambda, subst: Boolean): Lambda = {
+      cur match {
+        case cur: Var =>
+          if (remapped.contains(cur.name)) {
+            remapped.get(cur.name).get
+          } else if (cur == src) {
+            if (subst) dest else cur
+          } else {
+            cur
+          }
+        case cur: Abs =>
+          val substR = subst && cur.variable != src
+          val fv = cur.freeVars.map(v => v.name)
+          val sb: mutable.StringBuilder = new mutable.StringBuilder()
+          sb.append(cur.variable.name)
+          while (used.contains(sb.toString()) || fv.contains(sb.toString())) {
+            sb.append('\'')
+          }
+          val newName: Var = Var(sb.toString())
+          val prev = remapped.get(cur.variable.name)
+          if (newName != cur.variable)
+            remapped.put(cur.variable.name, newName)
+          val expr = recurse(cur.body, substR)
+          if (newName != cur.variable) {
+            prev match {
+              case Some(v) => remapped.put(cur.variable.name, v)
+              case _ => remapped.remove(cur.variable.name)
+            }
+          }
+          cur.modify(newName, expr)
+        case cur: App => cur.modify(recurse(cur.function, subst), recurse(cur.argument, subst))
+      }
+    }
+    recurse(this, subst = true)
+  }
+
+
   def freeVars: Set[Var]
 
   def boundVars: Set[Var]
@@ -32,7 +96,6 @@ sealed trait Lambda {
 
   def getType: (Type, Map[Var, Type]) = {
     def swap(terms: mutable.Buffer[TermEq[Type]]): mutable.Buffer[TermEq[Type]] = terms.map {
-      // TODO: add comparing of types
       case TermEq(x@(TVar(a)), y@(TVar(b))) if a > b => TermEq(y, x)
       case a => a
     }
@@ -47,7 +110,7 @@ sealed trait Lambda {
     def toType(term: Term[Type]): Type =
       term match {
         case TVar(a) => a
-        case TFun("->", (l::r::Nil)) => Arrow(toType(l), toType(r))
+        case TFun("->", (l :: r :: Nil)) => Arrow(toType(l), toType(r))
       }
     val (t0, fv, termEqs): (Type, Map[Var, Type], mutable.Buffer[TermEq[Type]]) = getFullType
     val ns: mutable.Buffer[TermEq[Type]] = addIDs(unify(swap(unify(termEqs))))
@@ -74,6 +137,8 @@ case class Var(name: String) extends Lambda {
   override def boundVars: Set[Var] = Set()
 
   override def substitute(v: Var, e: Lambda): Either[Var, Lambda] = Right(if (this == v) e else this)
+
+  override def step(): Lambda = this
 }
 
 case class App(function: Lambda, argument: Lambda) extends Lambda {
@@ -97,6 +162,15 @@ case class App(function: Lambda, argument: Lambda) extends Lambda {
     case (Left(t), _) => Left(t)
     case (_, Left(t)) => Left(t)
   }
+
+  override def step(): Lambda = function match {
+    case Abs(v, b) => b.substituteWithRename(v, argument)
+    case _ =>
+      val fStep = function.stepFarther()
+      if (function == fStep) modify(function, argument.stepFarther()) else modify(fStep, argument)
+  }
+
+  def modify(f: Lambda, a: Lambda): App = if (f == function && a == argument) this else App(f, a)
 }
 
 case class Abs(variable: Var, body: Lambda) extends Lambda {
@@ -122,4 +196,8 @@ case class Abs(variable: Var, body: Lambda) extends Lambda {
         case Right(in) => Right(Abs(variable, in))
         case Left(t) => Left(t)
       }
+
+  override def step(): Lambda = modify(variable, body.stepFarther())
+
+  def modify(v: Var, b: Lambda): Abs = if (v == variable && b == body) this else Abs(v, b)
 }
