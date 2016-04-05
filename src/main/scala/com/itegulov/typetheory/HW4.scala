@@ -11,6 +11,6 @@ import scala.io.Source
  */
 object HW4 extends scala.App {
   val pw = new PrintWriter("task4.out")
-  pw.println(LambdaParser(Source.fromFile("task4.in", "UTF-8").mkString).normalize())
+  pw.println(Normalizing.normalForm(LambdaParser(Source.fromFile("task4.in", "UTF-8").mkString)))
   pw.close()
 }
