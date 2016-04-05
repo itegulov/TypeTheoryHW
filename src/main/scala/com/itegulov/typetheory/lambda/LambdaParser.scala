@@ -1,69 +1,73 @@
 package com.itegulov.typetheory.lambda
 
-import scala.util.parsing.combinator.RegexParsers
-import scala.util.parsing.combinator.lexical.StdLexical
+import scala.collection.mutable
 
 /**
- * Lexer, telling, that λ isn't a letter
- *
- * @author Daniyar Itegulov
- */
-class LambdaLexer extends StdLexical {
-  override def letter = elem("letter", c => c.isLetter && c != 'λ')
-}
+  * Exception, which occurs on unsuccessful parses of lambda expressions
+  *
+  * @author Daniyar Itegulov
+  */
+class LambdaParseException extends Exception
 
 /**
- * Exception, which occurs on unsuccessful parses of lambda expressions
- *
- * @author Daniyar Itegulov
- */
-class LambdaParseException(msg: String) extends Exception(msg)
-
-/**
- * Simple lambda parser
- *
- * @author Daniyar Itegulov
- */
-/*
-object LambdaParser extends StdTokenParsers with PackratParsers {
-  type Tokens = LambdaLexer
-  val lexical = new LambdaLexer
-  lexical.delimiters ++= Seq("λ", ".", "(", ")")
-
-  type P[+T] = PackratParser[T]
-  lazy val expr: P[Lambda]             = lambda | application | variable | brackets
-  lazy val lambda: P[Abstraction]      = "λ" ~> variable ~ "." ~ expr ^^ { case v ~ "." ~ e  => Abstraction(v, e) }
-  lazy val application: P[Application] = expr ~ expr ^^ { case left ~ right => Application(left, right) }
-  lazy val variable: P[Variable]       = ident ^^ Variable
-  lazy val brackets: P[Lambda]         = "(" ~> expr <~ ")"
-
-  def parse(source: String): Lambda = {
-    val tokens = new lexical.Scanner(source)
-    phrase(expr)(tokens) match {
-      case Success(e, _)  => e
-      case err: NoSuccess => throw new LambdaParseException(err.toString)
+  * Simple lambda parser
+  *
+  * @author Daniyar Itegulov
+  */
+object LambdaParser {
+  def apply(s: String): Lambda = {
+    var cPos = 0
+    val reused: mutable.Map[Lambda, Lambda] = mutable.Map[Lambda, Lambda]()
+    val reusedVar: mutable.Map[String, Var] = mutable.Map[String, Var]()
+    def spaces(): Unit = while (cPos < s.length() && Character.isWhitespace(s.charAt(cPos))) cPos += 1
+    def reuseVar(name: String): Var = reusedVar.getOrElseUpdate(name, Var(name))
+    def reuse(lam: Lambda): Lambda = reused.getOrElseUpdate(lam, lam)
+    def lexeme(): String = {
+      val begin = cPos
+      while (cPos < s.length() && (Character.isLetterOrDigit(s.charAt(cPos)) || s.charAt(cPos) == '\'')) cPos += 1
+      s.substring(begin, cPos)
     }
-  }
-}
-*/
-object LambdaParser extends RegexParsers {
-  def expression: Parser[Lambda] = application | simpleExpression
-
-  def simpleExpression: Parser[Lambda] = function | variable | "(" ~> expression <~ ")"
-
-  def function: Parser[Abs] = lambda ~> variable ~ "." ~ expression ^^ { case v ~ "." ~ e  => Abs(v, e) }
-
-  def application: Parser[Lambda] =
-    simpleExpression~rep1(simpleExpression) ^^ { case exp ~ exps => (exp /: exps) { (app, e) => App(app, e) } }
-
-  def lambda: Parser[String] = """\\|λ""".r
-
-  def variable: Parser[Var] = """[a-z][a-z0-9']*""".r ^^ Var
-
-  def apply(input: String): Lambda = {
-    parseAll(expression, input) match {
-      case Success(e, _) => e
-      case err: NoSuccess => throw new LambdaParseException(err.toString)
+    def recursive(): Lambda = {
+      var result: Option[Lambda] = None
+      while (cPos < s.length()) {
+        val c = s.charAt(cPos)
+        c match {
+          case '\\' =>
+            cPos += 1
+            spaces()
+            val p = lexeme()
+            if (cPos == s.length() || s.charAt(cPos) != '.') throw new LambdaParseException()
+            cPos += 1
+            val res = reuse(Abs(reuseVar(p), recursive()))
+            return res
+          case '(' =>
+            cPos += 1
+            val nested = recursive()
+            result = result match {
+              case None => Some(nested)
+              case Some(r) => Some(reuse(App(r, nested)))
+            }
+          case ')' =>
+            cPos += 1
+            return result match {
+              case None => throw new LambdaParseException()
+              case Some(r) => r
+            }
+          case _ if c.isLetter || c.isDigit || c == '\'' =>
+            val name = lexeme()
+            result = result match {
+              case None => Some(reuseVar(name))
+              case Some(r) => Some(reuse(App(r, reuseVar(name))))
+            }
+          case _ =>
+            if (Character.isWhitespace(s.charAt(cPos)))
+              spaces()
+            else
+              throw new LambdaParseException()
+        }
+      }
+      result.getOrElse(throw new LambdaParseException())
     }
+    recursive()
   }
 }
